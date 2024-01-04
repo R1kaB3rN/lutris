@@ -8,7 +8,7 @@ import gi
 gi.require_version('Gdk', '3.0')
 gi.require_version('Gtk', '3.0')
 
-from gi.repository import Gdk, GLib, GObject, Gtk
+from gi.repository import Gdk, Gio, GLib, GObject, Gtk
 
 from lutris import api, settings
 from lutris.exceptions import InvalidGameMoveError
@@ -31,6 +31,9 @@ class Dialog(Gtk.Dialog):
         super().__init__(title, parent, flags, buttons, **kwargs)
         self._response_type = Gtk.ResponseType.NONE
         self.connect("response", self.on_response)
+
+        app = Gio.Application.get_default()
+        app.hold_for(self)
 
     @property
     def response_type(self) -> Gtk.ResponseType:
