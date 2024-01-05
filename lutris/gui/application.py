@@ -788,7 +788,7 @@ class Application(Gtk.Application):
 
             game = Game(db_game["id"])
             game.connect("game-error", on_error)
-            game.launch(self.launch_ui_delegate)
+            self.async_execute(game.launch(self.launch_ui_delegate))
 
             if game.state == game.STATE_STOPPED and not self.window.is_visible():
                 self.quit()
@@ -811,8 +811,8 @@ class Application(Gtk.Application):
                 self.set_tray_icon()
         return True
 
-    def on_game_launch(self, game):
-        game.launch(self.launch_ui_delegate)
+    async def on_game_launch(self, game):
+        await game.launch(self.launch_ui_delegate)
         return True  # Return True to continue handling the emission hook
 
     def on_game_start(self, game):
@@ -844,7 +844,7 @@ class Application(Gtk.Application):
                     self.quit()
         return True
 
-    def on_game_install(self, game):
+    async def on_game_install(self, game):
         """Request installation of a game"""
         if game.service and game.service != "lutris":
             service = get_enabled_services()[game.service]()
@@ -865,7 +865,7 @@ class Application(Gtk.Application):
 
                 game = Game(game_id)
                 game.connect("game-error", on_error)
-                game.launch(self.launch_ui_delegate)
+                await game.launch(self.launch_ui_delegate)
             return True
         if not game.slug:
             raise ValueError("Invalid game passed: %s" % game)
@@ -1150,6 +1150,7 @@ Also, check that the version specified is in the correct format.
         self.hold()
         task = async_execute(coroutine, error_objects=[self])
         task.add_done_callback(lambda *_args: self.release())
+        return task
 
     def do_quit_mainloop(self):
         asyncio.get_running_loop().stop()
