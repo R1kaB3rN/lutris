@@ -163,7 +163,7 @@ class libretro(Runner):
             if not await super().install(install_ui_delegate, version=None):
                 return False
             if version:
-                return super().install(install_ui_delegate, version)
+                return await super().install(install_ui_delegate, version)
 
             return True
 
