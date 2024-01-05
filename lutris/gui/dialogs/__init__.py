@@ -1,4 +1,5 @@
 """Commonly used dialogs"""
+import asyncio
 import os
 from gettext import gettext as _
 from typing import Callable
@@ -645,3 +646,63 @@ class HumbleBundleCookiesDialog(ModalDialog):
             self.cookies_content = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), True)
 
         super().on_response(dialog, response)
+
+
+async def _run_async(dialog):
+    """An implementation of Gtk.Dialog.run() that does not run a nested run loop,
+    but is instead async; you await this function. It also does the courtesy of hiding
+    the dialog, and destroying it at idle time, so you can just use the result this
+    returns and forget about the dialog.
+
+    This returns the response-id that the user selected, just like run() does."""
+    was_modal = dialog.get_modal()
+    destroyed = False
+    response_id = Gtk.ResponseType.NONE
+    ended = asyncio.get_running_loop().create_future()
+
+    def shutdown_loop():
+        if not ended.done():
+            ended.set_result(None)
+
+    def on_response(_dialog, response):
+        nonlocal response_id
+        response_id = response
+        shutdown_loop()
+
+    def on_unmap(_dialog, *_args):
+        shutdown_loop()
+
+    def on_delete(_dialog, *_args):
+        shutdown_loop()
+        return True  # do not destroy
+
+    def on_destroy(_dialog, *_args):
+        nonlocal destroyed
+        destroyed = True
+
+    dialog.set_modal(True)
+    dialog.show()
+
+    source_ids = [
+        dialog.connect("response", on_response),
+        dialog.connect("unmap", on_unmap),
+        dialog.connect("delete-event", on_delete),
+        dialog.connect("destroy", on_destroy),
+    ]
+
+    try:
+        await ended
+        return response_id
+    finally:
+        if not destroyed:
+            dialog.hide()
+            dialog.set_modal(was_modal)
+            for source_id in source_ids:
+                dialog.disconnect(source_id)
+            Dialog.destroy_dialog_at_idle(dialog, condition=lambda: not dialog.get_visible())
+
+
+def init_dialog_run():
+    """Provides an additional, improved version of run() to be used with
+    asyncio."""
+    Gtk.Dialog.run_async = _run_async

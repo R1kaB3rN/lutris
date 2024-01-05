@@ -51,7 +51,7 @@ from lutris.migrations import migrate
 from lutris.startup import init_lutris, run_all_checks
 from lutris.style_manager import StyleManager
 from lutris.util import datapath, log, system
-from lutris.util.jobs import AsyncCall
+from lutris.util.jobs import AsyncCall, init_main_loop
 from lutris.util.http import HTTPError, Request
 from lutris.util.log import logger
 from lutris.util.steam.appmanifest import AppManifest, get_appmanifests
@@ -115,6 +115,12 @@ class Application(Gtk.Application):
             self.add_arguments()
         else:
             ErrorDialog(_("Your Linux distribution is too old. Lutris won't function properly."))
+
+    async def start(self):
+        init_main_loop()
+        self.do_local_command_line(self, sys.argv)
+        self.register()
+        self.activate()
 
     def hold(self):
         self.hold_count += 1
