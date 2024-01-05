@@ -1,4 +1,5 @@
 """Dialog used to install versions of a runner"""
+import asyncio
 # pylint: disable=no-member
 import gettext
 import os
@@ -6,7 +7,7 @@ import re
 from collections import defaultdict
 from gettext import gettext as _
 
-from gi.repository import GLib, Gtk
+from gi.repository import Gtk
 
 from lutris import api, settings
 from lutris.api import format_runner_version
@@ -18,6 +19,7 @@ from lutris.gui.widgets.utils import has_stock_icon
 from lutris.util import jobs, system
 from lutris.util.downloader import Downloader
 from lutris.util.extract import extract_archive
+from lutris.util.jobs import call_async
 from lutris.util.log import logger
 
 
@@ -322,7 +324,6 @@ class RunnerInstallDialog(ModelessDialog):
         """Cancel the installation of a runner version"""
         runner = row.runner
         self.installing[runner["version"]].cancel()
-        runner["progress"] = 0
         self.installing.pop(runner["version"])
         self.update_listboxrow(row)
         await self.uninstall_runner(row)
@@ -345,28 +346,47 @@ class RunnerInstallDialog(ModelessDialog):
             get_installed_wine_versions.cache_clear()
         self.update_listboxrow(row)
 
-    def on_install_runner(self, _widget, row):
-        self.install_runner(row)
+    async def on_install_runner(self, _widget, row):
+        await self.install_runner(row)
 
-    def install_runner(self, row):
+    async def install_runner(self, row):
         """Download and install a runner version"""
         runner = row.runner
         row.install_progress.set_fraction(0.0)
         dest_path = self.get_dest_path(runner)
         url = runner["url"]
         version = runner["version"]
+        architecture = runner["architecture"]
         if not url:
             ErrorDialog(_("Version %s is not longer available") % version)
             return
+
         downloader = Downloader(url, dest_path, overwrite=True)
-        GLib.timeout_add(100, self.get_progress, downloader, row)
         self.installing[version] = downloader
         downloader.start()
         self.update_listboxrow(row)
+        while self.get_progress(downloader, row):
+            await asyncio.sleep(0.1)
+
+        if downloader.state == downloader.ERROR:
+            async_execute(self.cancel_install(row))
+        elif downloader.state == downloader.COMPLETED:
+            row.install_progress.set_text = _("Extracting…")
+
+            logger.debug("Runner %s for %s has finished downloading", version, architecture)
+            src = self.get_dest_path(runner)
+            dst = get_runner_path(self.runner_directory, version, architecture)
+
+            task = asyncio.create_task(self.extract(src, dst))
+            while not task.done():
+                row.install_progress.pulse()
+                await asyncio.sleep(0.1)
+            await task
+            os.remove(src)
+            self.on_extracted(row)
 
     def get_progress(self, downloader, row):
         """Update progress bar with download progress"""
-        runner = row.runner
         if downloader.state == downloader.CANCELLED:
             return False
         if downloader.state == downloader.ERROR:
@@ -376,50 +396,20 @@ class RunnerInstallDialog(ModelessDialog):
         downloader.check_progress()
         percent_downloaded = downloader.progress_percentage
         if percent_downloaded >= 1:
-            runner["progress"] = percent_downloaded
             row.install_progress.set_fraction(percent_downloaded / 100)
         else:
-            runner["progress"] = 1
             row.install_progress.pulse()
             row.install_progress.set_text = _("Downloading…")
-        if downloader.state == downloader.COMPLETED:
-            runner["progress"] = 99
-            row.install_progress.set_text = _("Extracting…")
-            self.on_runner_downloaded(row)
-            return False
-        return True
-
-    def progress_pulse(self, row):
-        runner = row.runner
-        row.install_progress.pulse()
-        return not runner["is_installed"]
-
-    def on_runner_downloaded(self, row):
-        """Handler called when a runner version is downloaded"""
-        runner = row.runner
-        version = runner["version"]
-        architecture = runner["architecture"]
-        logger.debug("Runner %s for %s has finished downloading", version, architecture)
-        src = self.get_dest_path(runner)
-        dst = get_runner_path(self.runner_directory, version, architecture)
-        GLib.timeout_add(100, self.progress_pulse, row)
-        jobs.AsyncCall(self.extract, self.on_extracted, src, dst, row)
+        return downloader.state != downloader.COMPLETED
 
     @staticmethod
-    def extract(src, dst, row):
+    async def extract(src, dst):
         """Extract a runner archive to a destination"""
-        extract_archive(src, dst)
-        return src, row
+        await call_async(extract_archive, src, dst)
 
-    def on_extracted(self, row_info, error):
+    def on_extracted(self, row):
         """Called when a runner archive is extracted"""
-        if error or not row_info:
-            ErrorDialog(_("Failed to retrieve the runner archive"), parent=self)
-            return
-        src, row = row_info
         runner = row.runner
-        os.remove(src)
-        runner["progress"] = 0
         runner["is_installed"] = True
         self.installing.pop(runner["version"])
         row.install_progress.set_text = ""
