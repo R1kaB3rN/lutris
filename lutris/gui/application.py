@@ -598,7 +598,7 @@ class Application(Gtk.Application):
         # Uninstall Runner
         if options.contains("uninstall-runner"):
             runner = options.lookup_value("uninstall-runner").get_string()
-            self.uninstall_runner(runner)
+            self.async_execute(self.uninstall_runner(runner))
             return 0
 
         if options.contains("export"):
@@ -1072,18 +1072,18 @@ class Application(Gtk.Application):
         else:
             await self.install_cli(runner)
 
-    def uninstall_runner(self, runner):
+    async def uninstall_runner(self, runner):
         if "wine" in runner:
             print("Are sure you want to delete Wine and all of the installed runners?[Y/N]")
             ans = input()
             if ans.lower() in ("y", "yes"):
-                self.uninstall_runner_cli(runner)
+                await self.uninstall_runner_cli(runner)
             else:
                 print("Not Removing Wine")
         elif runner.startswith("lutris"):
-            self.wine_runner_uninstall(runner)
+            await self.wine_runner_uninstall(runner)
         else:
-            self.uninstall_runner_cli(runner)
+            await self.uninstall_runner_cli(runner)
 
     async def install_wine_cli(self, version):
         """
@@ -1102,12 +1102,12 @@ class Application(Gtk.Application):
             except (InvalidRunnerError, RunnerInstallationError) as ex:
                 print(ex.message)
 
-    def wine_runner_uninstall(self, version):
+    async def wine_runner_uninstall(self, version):
         version = f"{version}{'' if '-x86_64' in version else '-x86_64'}"
         WINE_DIR = os.path.join(settings.RUNNER_DIR, "wine")
         runner_path = os.path.join(WINE_DIR, version)
         if os.path.isdir(runner_path):
-            system.remove_folder(runner_path)
+            await system.remove_folder_async(runner_path)
             print(f"Wine version '{version}' has been removed.")
         else:
             print(f"""
@@ -1131,7 +1131,7 @@ Also, check that the version specified is in the correct format.
         except (InvalidRunnerError, RunnerInstallationError) as ex:
             print(ex.message)
 
-    def uninstall_runner_cli(self, runner_name):
+    async def uninstall_runner_cli(self, runner_name):
         """
         uninstall the runner given in application file located in lutris/gui/application.py
         provided using lutris -u <runner>
@@ -1146,7 +1146,7 @@ Also, check that the version specified is in the correct format.
             print(f"Runner '{runner_name}' is not installed.")
             return
         if runner.can_uninstall():
-            runner.uninstall()
+            await runner.uninstall()
             print(f"'{runner_name}' has been uninstalled.")
         else:
             print(f"Runner '{runner_name}' cannot be uninstalled.")

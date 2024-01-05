@@ -4,7 +4,7 @@ from gi.repository import GObject, Gtk
 
 from lutris import runners
 from lutris.gui.config.runner import RunnerConfigDialog
-from lutris.gui.dialogs import QuestionDialog
+from lutris.gui.dialogs import QuestionDialogAsync
 from lutris.gui.dialogs.runner_install import RunnerInstallDialog
 from lutris.gui.widgets.scaled_image import ScaledImage
 from lutris.util.log import logger
@@ -104,20 +104,17 @@ class RunnerBox(Gtk.Box):
         application = window.get_application()
         application.show_window(RunnerConfigDialog, runner=self.runner, parent=window)
 
-    def on_remove_clicked(self, widget):
-        dialog = QuestionDialog(
+    async def on_remove_clicked(self, widget):
+        dialog = QuestionDialogAsync(
             {
                 "parent": self.get_toplevel(),
                 "title": _("Do you want to uninstall %s?") % self.runner.human_name,
                 "question": _("This will remove <b>%s</b> and all associated data." % self.runner.human_name)
-
             }
         )
-        if Gtk.ResponseType.YES == dialog.result:
-            def on_runner_uninstalled():
-                self.emit("runner-removed")
-
-            self.runner.uninstall(on_runner_uninstalled)
+        if Gtk.ResponseType.YES == await dialog.run_async():
+            await self.runner.uninstall()
+            self.emit("runner-removed")
 
     def on_runner_installed(self, widget):
         """Called after the runnner is installed"""

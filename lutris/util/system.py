@@ -17,7 +17,7 @@ from gi.repository import Gio, GLib
 
 from lutris import settings
 from lutris.exceptions import MissingExecutableError
-from lutris.util.jobs import AsyncCall
+from lutris.util.jobs import AsyncCall, get_main_loop
 from lutris.util.log import logger
 from lutris.util.portals import TrashPortal
 
@@ -371,6 +371,23 @@ def remove_folder(path: str,
     TrashPortal(path,
                 completion_function=completion_function,
                 error_function=error_function)
+
+
+async def remove_folder_async(path: str) -> None:
+    """Trashes a folder specified by path, asynchronously. The folder
+    likely exists after this returns, since it's using DBus to ask
+    for the entrashification.
+    """
+    future = get_main_loop().create_future()
+
+    def on_complete():
+        future.set_result(None)
+
+    def on_error(error):
+        future.set_exception(error)
+
+    remove_folder(path, completion_function=on_complete, error_function=on_error)
+    await future
 
 
 def delete_folder(path):
