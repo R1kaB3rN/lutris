@@ -11,6 +11,7 @@ from gi.repository import GLib, Gtk
 from lutris import api, settings
 from lutris.api import format_runner_version
 from lutris.database.games import get_games_by_runner
+from lutris.exception_backstops import async_execute
 from lutris.game import Game
 from lutris.gui.dialogs import ErrorDialog, ModelessDialog
 from lutris.gui.widgets.utils import has_stock_icon
@@ -314,43 +315,35 @@ class RunnerInstallDialog(ModelessDialog):
         """Return temporary path where the runners should be downloaded to"""
         return os.path.join(settings.CACHE_DIR, os.path.basename(runner["url"]))
 
-    def on_cancel_install(self, widget, row):
-        self.cancel_install(row)
+    async def on_cancel_install(self, widget, row):
+        await self.cancel_install(row)
 
-    def cancel_install(self, row):
+    async def cancel_install(self, row):
         """Cancel the installation of a runner version"""
         runner = row.runner
         self.installing[runner["version"]].cancel()
-        self.uninstall_runner(row)
         runner["progress"] = 0
         self.installing.pop(runner["version"])
         self.update_listboxrow(row)
+        await self.uninstall_runner(row)
 
-    def on_uninstall_runner(self, widget, row):
-        self.uninstall_runner(row)
+    async def on_uninstall_runner(self, widget, row):
+        await self.uninstall_runner(row)
 
-    def uninstall_runner(self, row):
+    async def uninstall_runner(self, row):
         """Uninstall a runner version"""
         runner = row.runner
         version = runner["version"]
         arch = runner["architecture"]
         runner_path = get_runner_path(self.runner_directory, version, arch)
+        await system.remove_folder_async(runner_path)
+        runner["is_installed"] = False
+        if self.runner_name == "wine":
+            logger.debug("Clearing wine version cache")
+            from lutris.util.wine.wine import get_installed_wine_versions
 
-        def on_complete():
-            runner["is_installed"] = False
-            if self.runner_name == "wine":
-                logger.debug("Clearing wine version cache")
-                from lutris.util.wine.wine import get_installed_wine_versions
-
-                get_installed_wine_versions.cache_clear()
-            self.update_listboxrow(row)
-
-        def on_error(error):
-            ErrorDialog(error, parent=self)
-
-        system.remove_folder(runner_path,
-                             completion_function=on_complete,
-                             error_function=on_error)
+            get_installed_wine_versions.cache_clear()
+        self.update_listboxrow(row)
 
     def on_install_runner(self, _widget, row):
         self.install_runner(row)
@@ -377,7 +370,7 @@ class RunnerInstallDialog(ModelessDialog):
         if downloader.state == downloader.CANCELLED:
             return False
         if downloader.state == downloader.ERROR:
-            self.cancel_install(row)
+            async_execute(self.cancel_install(row))
             return False
         row.install_progress.show()
         downloader.check_progress()
