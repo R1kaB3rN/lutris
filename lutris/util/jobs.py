@@ -79,24 +79,6 @@ def schedule_at_idle(func, *args):
     return GLib.idle_add(_make_idle_safe(func), *args)
 
 
-async def execute_at_idle_async(func, *args, **kwargs):
-    """Runs a function at idle time; await this to obtain the
-    result or exception."""
-
-    def execute():
-        try:
-            result = func(*args, **kwargs)
-            future.set_result(result)
-        except Exception as ex:
-            future.set_exception(ex)
-
-        return False  # do not repeat
-
-    future = get_main_loop().create_future()
-    GLib.idle_add(execute)
-    return await future
-
-
 def _make_idle_safe(function):
     """Wrap a function in another, which just discards its result.
     GLib.idle_add may call the function again if it returns True,
