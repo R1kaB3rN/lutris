@@ -15,7 +15,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import asyncio
 import json
 import logging
 import os
@@ -51,7 +50,7 @@ from lutris.migrations import migrate
 from lutris.startup import init_lutris, run_all_checks
 from lutris.style_manager import StyleManager
 from lutris.util import datapath, log, system
-from lutris.util.jobs import AsyncCall, init_main_loop
+from lutris.util.jobs import AsyncCall, init_main_loop, get_main_loop
 from lutris.util.http import HTTPError, Request
 from lutris.util.log import logger
 from lutris.util.steam.appmanifest import AppManifest, get_appmanifests
@@ -128,7 +127,7 @@ class Application(Gtk.Application):
     def release(self):
         self.hold_count -= 1
         if self.hold_count <= 0:
-            asyncio.get_running_loop().stop()
+            get_main_loop().stop()
             self.do_shutdown()
 
     def hold_for(self, window):
@@ -139,7 +138,7 @@ class Application(Gtk.Application):
         self.hold()
 
     def quit(self):
-        asyncio.get_running_loop().stop()
+        get_main_loop().stop()
         self.do_shutdown()
 
     @property
@@ -1159,7 +1158,7 @@ Also, check that the version specified is in the correct format.
         return task
 
     def do_quit_mainloop(self):
-        asyncio.get_running_loop().stop()
+        get_main_loop().stop()
         super().do_quit_mainloop(self)
 
     def do_shutdown(self):  # pylint: disable=arguments-differ

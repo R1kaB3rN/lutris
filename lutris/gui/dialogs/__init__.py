@@ -1,5 +1,4 @@
 """Commonly used dialogs"""
-import asyncio
 import os
 from gettext import gettext as _
 from typing import Callable
@@ -15,7 +14,7 @@ from lutris import api, settings
 from lutris.exceptions import InvalidGameMoveError
 from lutris.gui.widgets.log_text_view import LogTextView
 from lutris.util import datapath
-from lutris.util.jobs import AsyncCall
+from lutris.util.jobs import AsyncCall, get_main_loop
 from lutris.util.log import logger
 from lutris.util.strings import gtk_safe
 
@@ -658,7 +657,7 @@ async def _run_async(dialog):
     was_modal = dialog.get_modal()
     destroyed = False
     response_id = Gtk.ResponseType.NONE
-    ended = asyncio.get_running_loop().create_future()
+    ended = get_main_loop().create_future()
 
     def shutdown_loop():
         if not ended.done():
