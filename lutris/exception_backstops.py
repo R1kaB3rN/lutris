@@ -67,11 +67,16 @@ def async_execute(coroutine, error_objects: Iterable = None) -> asyncio.Task:
 def create_callback_error_wrapper(handler: Callable, handler_name: str,
                                   error_result: Any,
                                   async_result: Any,
+                                  async_result_handler: Callable[[Any], None] = None,
                                   error_method_name: str = None,
                                   error_objects: Iterable = None):
     """Wraps a handler function in an error handler that will log and then report
     any exceptions, then return the 'error_result'. If the handler returns a co-routine
     we schedule it, and then this function returns 'async_result'.
+
+    If you provide async_result_handler, it is only called if the handler returns a co-routines,
+    and it does not throw. It will be called to handle the result of the handler then, allowing
+    the correct behavior to be provided 'after the fact'.
 
     'handler_name' is incorporated in the log message.
 
@@ -98,6 +103,8 @@ def create_callback_error_wrapper(handler: Callable, handler_name: str,
         err = fut.exception()
         if err:
             on_error(err)
+        elif async_result_handler:
+            async_result_handler(fut.result())
 
     def error_wrapper(*args, **kwargs) -> Any:
         try:
@@ -181,25 +188,46 @@ def init_exception_backstops():
         return _original_connect(self, signal_spec, error_wrapper, *args, **kwargs)
 
     def _error_handling_add_emission_hook(emitting_type, signal_spec, handler, *args,
-                                          error_result=True, async_result=True,
+                                          error_result=True,
                                           **kwargs):
+        def result_handler(result):
+            # When the idle-function returns false, it wants its hook to be
+            # disconnected, so we'll do that.
+            if not result:
+                GLib.source_remove(source_id)
+
         error_wrapper = create_callback_error_wrapper(handler, f"emission hook '{emitting_type}.{signal_spec}'",
                                                       error_result=error_result,
-                                                      async_result=async_result,
+                                                      async_result=True,
+                                                      async_result_handler=result_handler,
                                                       error_method_name="on_emission_hook_error")
-        return _original_add_emission_hook(emitting_type, signal_spec, error_wrapper, *args, **kwargs)
+        source_id = _original_add_emission_hook(emitting_type, signal_spec, error_wrapper, *args, **kwargs)
+        return source_id
 
-    def _error_handling_idle_add(handler, *args, error_result=False, async_result=False, **kwargs):
+    def _error_handling_idle_add(handler, *args, error_result=False, **kwargs):
+        def result_handler(result):
+            # When the idle-function returns true, it wants to be run again,
+            # so we reschedule it. This does not preserve the source-id, unfortunately.
+            if result:
+                GLib.idle_add(handler, *args, **kwargs)
+
         error_wrapper = create_callback_error_wrapper(handler, "idle function",
                                                       error_result=error_result,
-                                                      async_result=async_result,
+                                                      async_result=False,
+                                                      async_result_handler=result_handler,
                                                       error_method_name="on_idle_error")
         return _original_idle_add(error_wrapper, *args, **kwargs)
 
-    def _error_handling_timeout_add(interval, handler, *args, error_result=False, async_result=False, **kwargs):
+    def _error_handling_timeout_add(interval, handler, *args, error_result=False, **kwargs):
+        def result_handler(result):
+            # When the timeout-function returns true, it wants to be run again,
+            # so we reschedule it. This does not preserve the source-id, unfortunately.
+            if result:
+                GLib.timeout_add(interval, handler, *args, **kwargs)
+
         error_wrapper = create_callback_error_wrapper(handler, "timeout function",
                                                       error_result=error_result,
-                                                      async_result=async_result,
+                                                      async_result=False,
                                                       error_method_name="on_timeout_error")
         return _original_timeout_add(interval, error_wrapper, *args, **kwargs)
 
