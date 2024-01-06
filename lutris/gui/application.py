@@ -116,6 +116,7 @@ class Application(Gtk.Application):
             ErrorDialog(_("Your Linux distribution is too old. Lutris won't function properly."))
 
     async def start(self):
+        # Must be async to defer execution via create_task().
         init_main_loop()
         self.do_local_command_line(self, sys.argv)
         self.register()

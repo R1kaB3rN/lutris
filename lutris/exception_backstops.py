@@ -228,6 +228,7 @@ def init_exception_backstops():
         error_wrapper = create_callback_error_wrapper(handler, "timeout function",
                                                       error_result=error_result,
                                                       async_result=False,
+                                                      async_result_handler=result_handler,
                                                       error_method_name="on_timeout_error")
         return _original_timeout_add(interval, error_wrapper, *args, **kwargs)
 
