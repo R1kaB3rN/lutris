@@ -1,5 +1,4 @@
 import asyncio
-from asyncio import Task, iscoroutine
 from functools import wraps
 from typing import Any, Callable, Iterable
 
@@ -47,7 +46,7 @@ def watch_game_errors(game_stop_result, game=None):
     return inner_decorator
 
 
-def async_execute(coroutine, error_objects: Iterable = None) -> Task:
+def async_execute(coroutine, error_objects: Iterable = None) -> asyncio.Task:
     """This schedules the co-routine given (creating a task), but adds error handling
     like we use for callbacks. The 'error_objects', if provided, are searched for
     a widget that can provide a top-level for the error dialog."""
@@ -103,7 +102,7 @@ def create_callback_error_wrapper(handler: Callable, handler_name: str,
     def error_wrapper(*args, **kwargs) -> Any:
         try:
             result = handler(*args, **kwargs)
-            if iscoroutine(result):
+            if asyncio.iscoroutine(result):
                 task = asyncio.create_task(result)
                 task.add_done_callback(on_future_error)
                 return async_result
