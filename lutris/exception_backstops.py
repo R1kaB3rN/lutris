@@ -175,6 +175,12 @@ def init_exception_backstops():
 
     Idle and timeout handlers will be disconnected if this happens to avoid repeated error reports,
     but signals and emission hooks will remain connected.
+
+    If an emission hook or timeout is async, it can still return False to be disconnected, but
+    may be invoked again while it is suspended.
+
+    If an idle-function goes async, it will not be re-scheduled until it has completed and
+    returns True. The source-id returned in this case is only for the first scheduling.
     """
 
     def _error_handling_connect(self: Gtk.Widget, signal_spec: str, handler, *args,
@@ -220,17 +226,18 @@ def init_exception_backstops():
 
     def _error_handling_timeout_add(interval, handler, *args, error_result=False, **kwargs):
         def result_handler(result):
-            # When the timeout-function returns true, it wants to be run again,
-            # so we reschedule it. This does not preserve the source-id, unfortunately.
-            if result:
-                GLib.timeout_add(interval, handler, *args, **kwargs)
+            # When the timeout-function returns false, it wants to not be run again,
+            # so we remove the source we got.
+            if not result:
+                GLib.source_remove(source_id)
 
         error_wrapper = create_callback_error_wrapper(handler, "timeout function",
                                                       error_result=error_result,
-                                                      async_result=False,
+                                                      async_result=True,
                                                       async_result_handler=result_handler,
                                                       error_method_name="on_timeout_error")
-        return _original_timeout_add(interval, error_wrapper, *args, **kwargs)
+        source_id = _original_timeout_add(interval, error_wrapper, *args, **kwargs)
+        return source_id
 
     _original_connect = Gtk.Widget.connect
     GObject.Object.connect = _error_handling_connect
