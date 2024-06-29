@@ -4,6 +4,7 @@
 import os
 import shlex
 import time
+from typing import Any, Dict, Tuple, Union
 
 from lutris import runtime, settings
 from lutris.monitored_command import MonitoredCommand
@@ -365,8 +366,17 @@ def wineexec(
 # pragma pylint: enable=too-many-locals
 
 
-def find_winetricks(env=None, system_winetricks=False):
+def find_winetricks(env=None, system_winetricks=False) -> Tuple[str, Union[str, None], Dict[str, Any]]:
     """Find winetricks path."""
+    runner = import_runner("wine")()
+    wine_path = runner.get_executable()
+
+    if wine_path == GE_PROTON_LATEST and env:
+        protonfixes_path = os.path.join(proton.get_proton_path_from_bin(wine_path), "protonfixes")
+        winetricks_path = f"{protonfixes_path}/winetricks"
+        env["GAMEID"] = "winetricks-gui"
+        return (winetricks_path, protonfixes_path, protonfixes_path)
+
     winetricks_path = os.path.join(settings.RUNTIME_DIR, "winetricks/winetricks")
     if system_winetricks or not system.path_exists(winetricks_path):
         winetricks_path = system.find_required_executable("winetricks")
