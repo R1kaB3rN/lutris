@@ -417,10 +417,6 @@ def winetricks(
         if not runner:
             runner = import_runner("wine")()
         winetricks_wine = runner.get_executable()
-    # We only need to perform winetricks if not using umu/proton. umu uses protonfixes
-    if proton.is_proton_path(wine_path):
-        logger.warning("Winetricks is currently not supported with Proton")
-        return
     if arch not in ("win32", "win64"):
         arch = detect_arch(prefix, winetricks_wine)
     args = app
