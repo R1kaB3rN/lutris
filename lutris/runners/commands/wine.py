@@ -300,16 +300,24 @@ def wineexec(
         args = '{} "{}"'.format(_args[0], _args[1])
 
     wineenv = {"WINEARCH": arch}
-    if winetricks_wine:
+    if winetricks_wine and wine_path != GE_PROTON_LATEST:
         wineenv["WINE"] = winetricks_wine
-    else:
+    if not winetricks and wine_path != GE_PROTON_LATEST:
         wineenv["WINE"] = wine_path
 
     if prefix:
         wineenv["WINEPREFIX"] = prefix
 
-    if proton.is_proton_path(wine_path):
+    is_proton_path = proton.is_proton_path(wine_path)
+    if is_proton_path:
         proton.update_proton_env(wine_path, wineenv)
+
+    logger.debug("proton path: %s", is_proton_path)
+    logger.debug("env: %s", env)
+    logger.debug("winetricks_wine: %s", winetricks_wine)
+    if is_proton_path and winetricks_wine:
+        logger.debug("set GAMEID=winetricks-gui")
+        wineenv["GAMEID"] = "winetricks-gui"
 
     # Create prefix if necessary
     if arch not in ("win32", "win64"):
@@ -349,6 +357,10 @@ def wineexec(
     runner.prelaunch()
 
     if blocking:
+        logger.debug("executing command")
+        logger.debug("command parameters: %s", command_parameters)
+        logger.debug("command env: %s", baseenv)
+        logger.debug("working dir: %s", working_dir)
         return system.execute(command_parameters, env=baseenv, cwd=working_dir)
 
     command = MonitoredCommand(
