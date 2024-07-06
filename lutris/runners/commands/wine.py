@@ -308,6 +308,7 @@ def wineexec(
     if prefix:
         wineenv["WINEPREFIX"] = prefix
 
+    logger.debug("wine path from wineexec: %s", wine_path)
     is_proton_path = proton.is_proton_path(wine_path)
     if is_proton_path:
         proton.update_proton_env(wine_path, wineenv)
@@ -421,6 +422,23 @@ def winetricks(
     runner=None,
 ):
     """Execute winetricks."""
+    if wine_path == GE_PROTON_LATEST:
+        logger.debug("using ge proton latest")
+        logger.debug("wine_path from winetricks: %s", wine_path)
+        return wineexec(
+            None,
+            prefix=prefix,
+            winetricks_wine="winetricks",
+            wine_path="",
+            working_dir=None,
+            arch=arch,
+            args="",
+            config=config,
+            env=env,
+            disable_runtime=disable_runtime,
+            runner=runner,
+        )
+
     winetricks_path, working_dir, env = find_winetricks(env, system_winetricks)
 
     if wine_path:
