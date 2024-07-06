@@ -422,9 +422,10 @@ def winetricks(
     runner=None,
 ):
     """Execute winetricks."""
+    logger.debug("inside winetricks")
+    logger.debug("wine_path from winetricks: %s", wine_path)
     if wine_path == GE_PROTON_LATEST:
         logger.debug("using ge proton latest")
-        logger.debug("wine_path from winetricks: %s", wine_path)
         return wineexec(
             None,
             prefix=prefix,

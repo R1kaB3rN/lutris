@@ -916,7 +916,11 @@ class wine(Runner):
 
     def run_winetricks(self, *args):
         """Run winetricks in the current context"""
+        version = self.get_runner_version()
+        logger.debug("inside run_winetricks")
+        logger.debug("runner version: %s", version)
         self.prelaunch()
+        # TODO Try to figure out if Proton is selected
         disable_runtime = not self.use_runtime()
         system_winetricks = self.runner_config.get("system_winetricks")
         if system_winetricks:
